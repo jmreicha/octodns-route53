@@ -74,6 +74,8 @@ zones:
 
 This allows you to optionally target specific Route53 hosted zones. Without specifying `zone_id`, octoDNS attempts to look up the zone by name, which is the normal behavior if there is only one zone present.
 
+This type of configuration is useful when zones have been created outside of octoDNS which are adopted.
+
 #### Ec2Souce
 
 ```yaml
