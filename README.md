@@ -47,9 +47,32 @@ providers:
     #session_token: env/AWS_SESSION_TOKEN
 ```
 
-Alternatively, you may leave out access_key_id, secret_access_key and session_token.  This will result in boto3 deciding authentication dynamically.
+Alternatively, you may leave out access_key_id, secret_access_key and session_token. This will result in boto3 deciding authentication dynamically.
 
 In general the account used will need full permissions on Route53.
+
+#### Multiple Zones with the Same Name
+
+If you need to manage multiple Route53 hosted zones with the same name (e.g., split horizon or situations where mutliple private zones exist), you can optionally specify the AWS Route53 `zone_id` at the zone level in your configuration:
+
+```yaml
+zones:
+  'example.com.':
+    zone_id: Z1234567890ABC # Explicit Route53 hosted zone ID for first zone
+    sources:
+      - config
+    targets:
+      - route53
+
+  'example.com.':
+    zone_id: Z0987654321CBA # Explicit Route53 hosted zone ID for second zone
+    sources:
+      - config_secondary
+    targets:
+      - route53
+```
+
+This configuration allows you to target specific Route53 hosted zones when you have multiple zones with the same name. Without specifying `zone_id`, octoDNS would attempt to look up the zone by name, which would be ambiguous when multiple hosted zones share the same name.
 
 #### Ec2Souce
 

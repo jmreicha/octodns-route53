@@ -741,8 +741,17 @@ class Route53Provider(_AuthMixin, BaseProvider):
                 id = self._get_zone_id_by_name(name)
                 self._r53_zones[name] = id
 
-    def _get_zone_id(self, name, create=False):
-        self.log.debug('_get_zone_id: name=%s', name)
+    def _get_zone_id(self, name, create=False, zone_id=None):
+        self.log.debug('_get_zone_id: name=%s, zone_id=%s', name, zone_id)
+
+        # If zone_id is explicitly provided, use it instead of looking up by name
+        if zone_id:
+            self.log.debug(
+                '_get_zone_id:   using explicitly configured zone_id=%s',
+                zone_id,
+            )
+            return zone_id
+
         self.update_r53_zones(name)
         id = None
         if name in self._r53_zones:
@@ -1679,7 +1688,13 @@ class Route53Provider(_AuthMixin, BaseProvider):
 
         batch = []
         batch_rs_count = 0
-        zone_id = self._get_zone_id(desired.name, True)
+        # Look for zone_id in zone config
+        zone_id = self._get_zone_id(
+            desired.name,
+            True,
+            # Pass zone_id from zone config if available
+            zone_id=getattr(plan.desired, 'zone_id', None),
+        )
         existing_rrsets = self._load_records(zone_id)
         for c in changes:
             # Generate the mods for this change
