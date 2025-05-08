@@ -47,9 +47,32 @@ providers:
     #session_token: env/AWS_SESSION_TOKEN
 ```
 
-Alternatively, you may leave out access_key_id, secret_access_key and session_token.  This will result in boto3 deciding authentication dynamically.
+Alternatively, you may leave out access_key_id, secret_access_key and session_token. This will result in boto3 deciding authentication dynamically.
 
 In general the account used will need full permissions on Route53.
+
+#### Multiple Zones with the Same Name
+
+If you need to manage multiple Route53 hosted zones with the same name (e.g., in split horizon or situations where mutliple private zones exist), you can optionally specify the AWS Route53 `zone_id` at the zone level in your configuration:
+
+```yaml
+zones:
+  'example.com.':
+    zone_id: Z1234567890ABC # Explicit Route53 hosted zone ID for first zone
+    sources:
+      - config
+    targets:
+      - route53
+
+  'example.com.':
+    zone_id: Z0987654321CBA # Explicit Route53 hosted zone ID for second zone
+    sources:
+      - config_secondary
+    targets:
+      - route53
+```
+
+This configuration allows you to target specific Route53 hosted zones when you have multiple zones with the same name. Without specifying `zone_id`, octoDNS would attempt to look up the zone by name, which would be ambiguous when multiple hosted zones share the same name.
 
 #### Ec2Souce
 
@@ -165,8 +188,8 @@ Route53Provider supports dynamic records, CNAME health checks don't support a Ho
 ```yaml
 # "symlink" to another record in the same zone
 alias:
-    type: Route53Provider/ALIAS
-    values:
+  type: Route53Provider/ALIAS
+  values:
     # ALIAS for the zone APEX A record
     - type: A
     # ALIAS for www.whatever.com. AAAA
@@ -176,39 +199,39 @@ alias:
       type: AAAA
 # "symlink" to a AWS service
 alb:
-    type: Route53Provider/ALIAS
-    value:
-        # default for evaluate-target-health is False
-        evaluate-target-health: true
-        # hosted-zone-id should only be used when pointing to service endpoints
-        hosted-zone-id: Z42SXDOTRQ7X7K
-        name: dualstack.octodns-testing-1165866977.us-east-1.elb.amazonaws.com.
-        type: A
+  type: Route53Provider/ALIAS
+  value:
+    # default for evaluate-target-health is False
+    evaluate-target-health: true
+    # hosted-zone-id should only be used when pointing to service endpoints
+    hosted-zone-id: Z42SXDOTRQ7X7K
+    name: dualstack.octodns-testing-1165866977.us-east-1.elb.amazonaws.com.
+    type: A
 ```
 
 #### Health Check Options
 
 See https://github.com/octodns/octodns/blob/master/docs/dynamic_records.md#health-checks for information on health checking for dynamic records. Route53Provider supports the following options:
 
-| Key  | Description | Default |
-|--|--|--|
-| failure_threshold | Failure threshold before state change, 1-10 | 6 |
-| measure_latency | Show latency in AWS console | true |
-| request_interval | Healthcheck interval [10\|30] seconds | 10 |
+| Key               | Description                                 | Default |
+| ----------------- | ------------------------------------------- | ------- |
+| failure_threshold | Failure threshold before state change, 1-10 | 6       |
+| measure_latency   | Show latency in AWS console                 | true    |
+| request_interval  | Healthcheck interval [10\|30] seconds       | 10      |
 
 ```yaml
 ---
-  octodns:
+octodns:
+  healthcheck:
+    host: my-host-name
+    path: /dns-health-check
+    port: 443
+    protocol: HTTPS
+  route53:
     healthcheck:
-      host: my-host-name
-      path: /dns-health-check
-      port: 443
-      protocol: HTTPS
-    route53:
-      healthcheck:
-        failure_threshold: 3
-        measure_latency: false
-        request_interval: 30
+      failure_threshold: 3
+      measure_latency: false
+      request_interval: 30
 ```
 
 ### Development

@@ -224,12 +224,12 @@ class _Route53Record(EqualityTupleMixin):
     # Values are ignored. This is useful when computing diffs/changes.
 
     def __hash__(self):
-        'sub-classes should never use this method'
+        "sub-classes should never use this method"
         return f'{self.fqdn}:{self._type}'.__hash__()
 
     def _equality_tuple(self):
-        '''Sub-classes should call up to this and return its value and add
-        any additional fields they need to hav considered.'''
+        """Sub-classes should call up to this and return its value and add
+        any additional fields they need to hav considered."""
         return (self.__class__.__name__, self.fqdn, self._type)
 
     def __repr__(self):
@@ -617,7 +617,7 @@ def _parse_pool_name(n):
 
 
 class Route53Provider(_AuthMixin, BaseProvider):
-    '''
+    """
     AWS Route53 Provider
 
     route53:
@@ -635,7 +635,7 @@ class Route53Provider(_AuthMixin, BaseProvider):
     This will result in boto3 deciding authentication dynamically.
 
     In general the account used will need full permissions on Route53.
-    '''
+    """
 
     SUPPORTS_GEO = True
     SUPPORTS_DYNAMIC = True
@@ -709,7 +709,7 @@ class Route53Provider(_AuthMixin, BaseProvider):
         # attempt to get zone by name
         # limited to one as this should be unique
         id = None
-        resp = self._conn.list_hosted_zones_by_name(DNSName=name, MaxItems="1")
+        resp = self._conn.list_hosted_zones_by_name(DNSName=name, MaxItems='1')
         if len(resp['HostedZones']) != 0:
             # if there is a response that starts with the name
             if _octal_replace(resp['HostedZones'][0]['Name']).startswith(name):
@@ -741,9 +741,19 @@ class Route53Provider(_AuthMixin, BaseProvider):
                 id = self._get_zone_id_by_name(name)
                 self._r53_zones[name] = id
 
-    def _get_zone_id(self, name, create=False):
-        self.log.debug('_get_zone_id: name=%s', name)
+    def _get_zone_id(self, name, create=False, zone_id=None):
+        self.log.debug('_get_zone_id: name=%s, zone_id=%s', name, zone_id)
+
+        # If zone_id is explicitly provided, use it instead of looking up by name
+        if zone_id:
+            self.log.debug(
+                '_get_zone_id:   using explicitly configured zone_id=%s',
+                zone_id,
+            )
+            return zone_id
+
         self.update_r53_zones(name)
+
         id = None
         if name in self._r53_zones:
             id = self._r53_zones[name]
@@ -1078,8 +1088,7 @@ class Route53Provider(_AuthMixin, BaseProvider):
                         before = ', '.join(geos)
                         after = ', '.join(filtered_geos)
                         fallback = (
-                            f'filtering rule {i} from ({before}) to '
-                            f'({after})'
+                            f'filtering rule {i} from ({before}) to ({after})'
                         )
                         self.supports_warn_or_except(msg, fallback)
                         rule.data['geos'] = filtered_geos
@@ -1199,9 +1208,9 @@ class Route53Provider(_AuthMixin, BaseProvider):
         return exists
 
     def _gen_mods(self, action, records, existing_rrsets):
-        '''
+        """
         Turns `_Route53*`s in to `change_resource_record_sets` `Changes`
-        '''
+        """
         return [r.mod(action, existing_rrsets) for r in records]
 
     @property
@@ -1457,7 +1466,7 @@ class Route53Provider(_AuthMixin, BaseProvider):
         # Now we need to run through ALL the health checks looking for those
         # that apply to this record, deleting any that do and are no longer in
         # use
-        expected_re = re.compile(fr'^\d\d\d\d:{record._type}:{record.fqdn}:')
+        expected_re = re.compile(rf'^\d\d\d\d:{record._type}:{record.fqdn}:')
         # UNITL 1.0: we'll clean out the previous version of Route53 health
         # checks as best as we can.
         expected_legacy_host = record.fqdn[:-1]
@@ -1478,9 +1487,9 @@ class Route53Provider(_AuthMixin, BaseProvider):
                     self._conn.delete_health_check(HealthCheckId=id)
 
     def _gen_records(self, record, zone_id, creating=False):
-        '''
+        """
         Turns an octodns.Record into one or more `_Route53*`s
-        '''
+        """
         return _Route53Record.new(self, record, zone_id, creating)
 
     def _mod_Create(self, change, zone_id, existing_rrsets):
@@ -1583,8 +1592,7 @@ class Route53Provider(_AuthMixin, BaseProvider):
 
         # no good, doesn't have the right health check, needs an update
         self.log.info(
-            '_extra_changes_update_needed: health-check caused '
-            'update of %s:%s',
+            '_extra_changes_update_needed: health-check caused update of %s:%s',
             record.fqdn,
             record._type,
         )
@@ -1679,7 +1687,13 @@ class Route53Provider(_AuthMixin, BaseProvider):
 
         batch = []
         batch_rs_count = 0
-        zone_id = self._get_zone_id(desired.name, True)
+        # Look for zone_id in zone config
+        zone_id = self._get_zone_id(
+            desired.name,
+            True,
+            # Pass zone_id from zone config if available
+            zone_id=getattr(plan.desired, 'zone_id', None),
+        )
         existing_rrsets = self._load_records(zone_id)
         for c in changes:
             # Generate the mods for this change
@@ -1731,8 +1745,7 @@ class Route53Provider(_AuthMixin, BaseProvider):
         # it was always the case that there was something pushing us over
         # max_changes and thus left over to submit.
         self.log.info(
-            '_apply:   sending change request for batch of %d mods,'
-            ' %d ResourceRecords',
+            '_apply:   sending change request for batch of %d mods, %d ResourceRecords',
             len(batch),
             batch_rs_count,
         )

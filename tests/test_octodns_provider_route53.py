@@ -73,7 +73,7 @@ class TestHealthCheckRefPrefix(TestCase):
             self.assertLessEqual(
                 len(
                     _healthcheck_ref_prefix(
-                        Route53Provider.HEALTH_CHECK_VERSION, "CNAME", s
+                        Route53Provider.HEALTH_CHECK_VERSION, 'CNAME', s
                     )
                 ),
                 (64 - 13),
@@ -92,14 +92,13 @@ class TestHealthCheckRefPrefix(TestCase):
             ),
             (
                 '008ffbe028b7fe7d8b16',
-                '0001:CNAME:this.is.a.very.longggggggg.'
-                'record.for.testing.purposes.com',
+                '0001:CNAME:this.is.a.very.longggggggg.record.for.testing.purposes.com',
             ),
         ):
             self.assertEqual(
-                f"{Route53Provider.HEALTH_CHECK_VERSION}:CNAME:{expected}",
+                f'{Route53Provider.HEALTH_CHECK_VERSION}:CNAME:{expected}',
                 _healthcheck_ref_prefix(
-                    Route53Provider.HEALTH_CHECK_VERSION, "CNAME", s
+                    Route53Provider.HEALTH_CHECK_VERSION, 'CNAME', s
                 ),
             )
 
@@ -598,7 +597,7 @@ class TestRoute53Provider(TestCase):
             'test',
             'abc',
             '123',
-            delegation_set_id="ABCDEFG123456",
+            delegation_set_id='ABCDEFG123456',
             strict_supports=False,
         )
 
@@ -648,7 +647,7 @@ class TestRoute53Provider(TestCase):
 
         stubber.add_response('list_hosted_zones', list_hosted_zones)
 
-        provider.update_r53_zones("unit.tests.")
+        provider.update_r53_zones('unit.tests.')
         self.assertEqual(provider._r53_zones, {'unit.tests.': 'z40'})
 
     def test_update_r53_zones_with_get_zones_by_name(self):
@@ -677,7 +676,7 @@ class TestRoute53Provider(TestCase):
             {'DNSName': 'unit.tests.', 'MaxItems': '1'},
         )
 
-        provider.update_r53_zones("unit.tests.")
+        provider.update_r53_zones('unit.tests.')
         self.assertEqual(provider._r53_zones, {'unit.tests.': 'z40'})
 
     def test_update_r53_zones_with_octal_replaced(self):
@@ -700,7 +699,7 @@ class TestRoute53Provider(TestCase):
 
         stubber.add_response('list_hosted_zones', list_hosted_zones)
 
-        provider.update_r53_zones("0/25.2.0.192.in-addr.arpa.")
+        provider.update_r53_zones('0/25.2.0.192.in-addr.arpa.')
         self.assertEqual(
             provider._r53_zones, {'0/25.2.0.192.in-addr.arpa.': 'z41'}
         )
@@ -731,7 +730,7 @@ class TestRoute53Provider(TestCase):
             {'DNSName': '0/25.2.0.192.in-addr.arpa.', 'MaxItems': '1'},
         )
 
-        provider.update_r53_zones("0/25.2.0.192.in-addr.arpa.")
+        provider.update_r53_zones('0/25.2.0.192.in-addr.arpa.')
         self.assertEqual(
             provider._r53_zones, {'0/25.2.0.192.in-addr.arpa.': 'z41'}
         )
@@ -1045,7 +1044,7 @@ class TestRoute53Provider(TestCase):
             )
             stubber.add_client_error(
                 'list_resource_record_sets',
-                expected_params={'HostedZoneId': u'z42'},
+                expected_params={'HostedZoneId': 'z42'},
             )
             provider.populate(got)
             stubber.assert_no_pending_responses()
@@ -1355,15 +1354,15 @@ class TestRoute53Provider(TestCase):
                         'Action': 'DELETE',
                         'ResourceRecordSet': {
                             'Name': 'extra.unit.tests.',
-                            'ResourceRecords': [{'Value': u'9.9.9.9'}],
+                            'ResourceRecords': [{'Value': '9.9.9.9'}],
                             'TTL': 99,
                             'Type': 'A',
                         },
                     }
                 ],
-                u'Comment': ANY,
+                'Comment': ANY,
             },
-            'HostedZoneId': u'z42',
+            'HostedZoneId': 'z42',
         }
         stubber.add_response(
             'change_resource_record_sets',
@@ -3506,6 +3505,175 @@ class TestRoute53Provider(TestCase):
         self.assertEqual('DELETE', ret[0]['Action'])
         self.assertEqual('CREATE', ret[1]['Action'])
 
+    def test_get_zone_id_with_explicit_zone_id(self):
+        provider, stubber = self._get_stubbed_provider()
+
+        # When zone_id is explicitly provided, it should be returned directly
+        explicit_zone_id = 'Z123456EXPLICIT'
+        zone_id = provider._get_zone_id('unit.tests.', zone_id=explicit_zone_id)
+        self.assertEqual(explicit_zone_id, zone_id)
+
+        # No API calls should have been made
+        stubber.assert_no_pending_responses()
+
+    def test_apply_with_zone_id_from_zone_config(self):
+        provider, stubber = self._get_stubbed_provider()
+
+        # Mock Plan with a zone that has zone_id attribute
+        plan = Mock()
+        desired = Zone('unit.tests.', [])
+        # Use a string instead of attribute to avoid Mock objects
+        desired.zone_id = 'Z123456EXPLICIT'
+        plan.desired = desired
+
+        # Add a change to avoid empty ChangeBatch validation error
+        record = Record.new(
+            desired, '', {'ttl': 60, 'type': 'A', 'value': '192.0.2.1'}
+        )
+        plan.changes = [Create(record)]
+
+        list_resource_record_sets_resp = {
+            'ResourceRecordSets': [],
+            'IsTruncated': False,
+            'MaxItems': '100',
+        }
+
+        # The explicit zone_id should be used, not looked up by name
+        stubber.add_response(
+            'list_resource_record_sets',
+            list_resource_record_sets_resp,
+            {'HostedZoneId': 'Z123456EXPLICIT'},
+        )
+
+        # Need to add response for health checks and change_resource_record_sets
+        stubber.add_response(
+            'list_health_checks',
+            {
+                'HealthChecks': [],
+                'IsTruncated': False,
+                'MaxItems': '100',
+                'Marker': '',
+            },
+        )
+
+        stubber.add_response(
+            'change_resource_record_sets',
+            {
+                'ChangeInfo': {
+                    'Id': 'id',
+                    'Status': 'PENDING',
+                    'SubmittedAt': '2017-01-29T01:02:03Z',
+                }
+            },
+            {'HostedZoneId': 'Z123456EXPLICIT', 'ChangeBatch': ANY},
+        )
+
+        provider._apply(plan)
+        stubber.assert_no_pending_responses()
+
+    def test_apply_with_multiple_zones_same_name(self):
+        # Create two zones with the same name but different zone_ids
+        zone1 = Zone('example.com.', [])
+        zone1.zone_id = 'Z111111ZONE1'
+        record1 = Record.new(
+            zone1, '', {'ttl': 60, 'type': 'A', 'value': '192.0.2.1'}
+        )
+        zone1.add_record(record1)
+
+        zone2 = Zone('example.com.', [])
+        zone2.zone_id = 'Z222222ZONE2'
+        record2 = Record.new(
+            zone2, '', {'ttl': 60, 'type': 'A', 'value': '192.0.2.2'}
+        )
+        zone2.add_record(record2)
+
+        # Mock plans for both zones
+        plan1 = Mock()
+        plan1.desired = zone1
+        plan1.changes = [Create(record1)]
+
+        plan2 = Mock()
+        plan2.desired = zone2
+        plan2.changes = [Create(record2)]
+
+        # First zone apply with its own provider
+        provider1, stubber1 = self._get_stubbed_provider()
+
+        list_resource_record_sets_resp1 = {
+            'ResourceRecordSets': [],
+            'IsTruncated': False,
+            'MaxItems': '100',
+        }
+
+        stubber1.add_response(
+            'list_resource_record_sets',
+            list_resource_record_sets_resp1,
+            {'HostedZoneId': 'Z111111ZONE1'},
+        )
+        stubber1.add_response(
+            'list_health_checks',
+            {
+                'HealthChecks': [],
+                'IsTruncated': False,
+                'MaxItems': '100',
+                'Marker': '',
+            },
+        )
+        stubber1.add_response(
+            'change_resource_record_sets',
+            {
+                'ChangeInfo': {
+                    'Id': 'id1',
+                    'Status': 'PENDING',
+                    'SubmittedAt': '2017-01-29T01:02:03Z',
+                }
+            },
+            {'HostedZoneId': 'Z111111ZONE1', 'ChangeBatch': ANY},
+        )
+
+        # Apply the first plan
+        provider1._apply(plan1)
+        stubber1.assert_no_pending_responses()
+
+        # Second zone apply with a fresh provider
+        provider2, stubber2 = self._get_stubbed_provider()
+
+        list_resource_record_sets_resp2 = {
+            'ResourceRecordSets': [],
+            'IsTruncated': False,
+            'MaxItems': '100',
+        }
+
+        stubber2.add_response(
+            'list_resource_record_sets',
+            list_resource_record_sets_resp2,
+            {'HostedZoneId': 'Z222222ZONE2'},
+        )
+        stubber2.add_response(
+            'list_health_checks',
+            {
+                'HealthChecks': [],
+                'IsTruncated': False,
+                'MaxItems': '100',
+                'Marker': '',
+            },
+        )
+        stubber2.add_response(
+            'change_resource_record_sets',
+            {
+                'ChangeInfo': {
+                    'Id': 'id2',
+                    'Status': 'PENDING',
+                    'SubmittedAt': '2017-01-29T01:02:03Z',
+                }
+            },
+            {'HostedZoneId': 'Z222222ZONE2', 'ChangeBatch': ANY},
+        )
+
+        # Apply the second plan
+        provider2._apply(plan2)
+        stubber2.assert_no_pending_responses()
+
 
 class DummyProvider(object):
     def get_health_check_id(self, *args, **kwargs):
@@ -4326,3 +4494,4 @@ class TestRoute53AliasRecord(TestCase):
 
         # doesn't blow up
         r53a0.__repr__()
+        r53a1.__repr__()
