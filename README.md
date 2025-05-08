@@ -60,14 +60,14 @@ zones:
   'example.com.':
     zone_id: Z1234567890ABC # Explicit Route53 hosted zone ID for first zone
     sources:
-      - config
+      - config_public_zone
     targets:
       - route53
 
   'example.com.':
     zone_id: Z0987654321CBA # Explicit Route53 hosted zone ID for second zone
     sources:
-      - config_secondary
+      - config_private_zone
     targets:
       - route53
 ```
