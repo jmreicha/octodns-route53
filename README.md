@@ -72,7 +72,7 @@ zones:
       - route53
 ```
 
-This configuration allows you to target specific Route53 hosted zones when you have multiple zones with the same name. Without specifying `zone_id`, octoDNS would attempt to look up the zone by name, which would be ambiguous when multiple hosted zones share the same name.
+This allows you to optionally target specific Route53 hosted zones. Without specifying `zone_id`, octoDNS attempts to look up the zone by name, which is the normal behavior if there is only one zone present.
 
 #### Ec2Souce
 
